@@ -3,16 +3,15 @@ resources:
   instance_type: ml.g5.48xlarge
   volume_size: 500
 pre_script: 
-  - SCRIPT_DIR=/NeMo/scripts/nlp_language_modeling/merge_lora_weights
+  - SCRIPT_DIR=/NeMo/scripts/checkpoint_converters
   - cd $SCRIPT_DIR
   - mkdir -p $LOG_ROOT
-  - OUTPUT_LOG=$LOG_ROOT/merge_peft.log
-  - PATH_TO_BASE_MODEL=$MODEL_PATH/ckpt.nemo
-  - echo "PATH_TO_BASE_MODEL=$PATH_TO_BASE_MODEL"
-  - PATH_TO_PEFT_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/$EXP_NAME.nemo
-  - echo "PATH_TO_PEFT_MODEL=$PATH_TO_PEFT_MODEL"
+  - OUTPUT_LOG=$LOG_ROOT/nemo_to_hf.log
+  - TMP_OUTPUT_PATH=/tmp/$EXP_NAME
   - PATH_TO_MERGED_MODEL=$LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints/merged_model.nemo
   - echo "PATH_TO_MERGED_MODEL=$PATH_TO_MERGED_MODEL"
+post_script:
+  - cp -r $TMP_OUTPUT_PATH $MODEL_PATH/
 train:
   env:
     - name: LOG_ROOT
@@ -22,11 +21,12 @@ train:
     - name: EXP_NAME
       value: peft_dolphin
   command:
-    - python
+    - python3
   args:
-    - merge.py
-    - trainer.accelerator=cpu
-    - gpt_model_file=$PATH_TO_BASE_MODEL
-    - lora_model_path=$PATH_TO_PEFT_MODEL
-    - merged_model_path=$PATH_TO_MERGED_MODEL
+    - convert_llama_nemo_to_hf.py
+    - --input_name_or_path=$PATH_TO_MERGED_MODEL
+    - --output_path=$TMP_OUTPUT_PATH/model.bin
+    - --hf_input_path=$MODEL_PATH
+    - --hf_output_path=$TMP_OUTPUT_PATH
+    - --cpu-only
     - '2>&1 | tee $OUTPUT_LOG'

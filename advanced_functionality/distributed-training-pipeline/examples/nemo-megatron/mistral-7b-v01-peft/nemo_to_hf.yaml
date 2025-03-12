@@ -1,6 +1,6 @@
 resources:
   instance_count: 1
-  instance_type: ml.p3.16xlarge
+  instance_type: ml.g5.48xlarge
   volume_size: 500
 pre_script: 
   - SCRIPT_DIR=/NeMo/scripts/checkpoint_converters

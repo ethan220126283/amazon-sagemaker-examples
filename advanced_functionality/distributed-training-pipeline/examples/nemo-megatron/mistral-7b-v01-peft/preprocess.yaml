@@ -55,6 +55,7 @@ pre_script:
       main()
         
     EOF
+  - 'if [ -d $DATA_ROOT ]; then rm -rf $DATA_ROOT; fi'
   - mkdir -p $DATA_ROOT
   - cd $GIT_CLONE_DIR/preprocess
 post_script:

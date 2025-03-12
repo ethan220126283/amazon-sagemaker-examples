@@ -9,15 +9,16 @@ pre_script:
   - mkdir -p $LOGS_DIR
   - export OUTPUT_LOG=$LOGS_DIR/peft.log
   - MODEL="$MODEL_PATH/ckpt.nemo"
-  - TRAIN_DS="[$DATA_ROOT/pubmedqa_train.jsonl]"
-  - VALID_DS="[$DATA_ROOT/pubmedqa_val.jsonl]"
-  - TEST_DS="[$DATA_ROOT/pubmedqa_test.jsonl]"
-  - TEST_NAMES="[pubmedqa]"
+  - DATASET="pubmedqa"
+  - TRAIN_DS="[$DATA_ROOT/${DATASET}_train.jsonl]"
+  - VALID_DS="[$DATA_ROOT/${DATASET}_val.jsonl]"
+  - TEST_DS="[$DATA_ROOT/${DATASET}_test.jsonl]"
+  - TEST_NAMES="[${DATASET}]"
   - SCHEME="lora"
   - CONCAT_SAMPLING_PROBS="[1.0]"
   - TP_SIZE=8
   - PP_SIZE=1
-  - MAX_STEPS=10000
+  - MAX_STEPS=1000
   - export HYDRA_FULL_ERROR=1
   - export PEFT_ARGS="
     trainer.devices=$PET_NPROC_PER_NODE
@@ -29,9 +30,9 @@ pre_script:
     ++model.mcore_gpt=True
     model.tensor_model_parallel_size=${TP_SIZE}
     model.pipeline_model_parallel_size=${PP_SIZE}
-    model.micro_batch_size=1
-    model.global_batch_size=32
-    model.optim.lr=1e-4
+    model.micro_batch_size=4
+    model.global_batch_size=96
+    model.optim.lr=1e-5
     model.restore_from_path=${MODEL}
     model.data.train_ds.num_workers=0
     model.data.validation_ds.num_workers=0
@@ -51,11 +52,13 @@ pre_script:
     ++exp_manager.checkpoint_callback_params.save_best_model=True
     exp_manager.checkpoint_callback_params.save_nemo_on_train_end=True
     exp_manager.early_stopping_callback_params.monitor=val_loss
-    exp_manager.early_stopping_callback_params.patience=10
+    exp_manager.early_stopping_callback_params.patience=3
     exp_manager.early_stopping_callback_params.min_delta=0.001
     model.save_nemo_on_validation_end=False"
   - SCRIPT_DIR=/NeMo/examples/nlp/language_modeling/tuning
   - cd $HOME
+  - 'if [ "${PET_NODE_RANK}" -eq "0" ]; then rm $DATA_ROOT/${DATASET}*.idx.* ; fi'
+  - 'if [ -d $LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints ]; then rm -rf $LOG_ROOT/nemo_experiments/$EXP_NAME/checkpoints; fi'
 train:
   distribution: "torch"
   env:
@@ -74,7 +77,7 @@ train:
     - name: EXP_NAME
       value: "peft_pubmedqa"
     - name: NCCL_DEBUG
-      value: "INFO"
+      value: "WARN"
     - name: NCCL_SOCKET_IFNAME 
       value: "eth0"
   command:
