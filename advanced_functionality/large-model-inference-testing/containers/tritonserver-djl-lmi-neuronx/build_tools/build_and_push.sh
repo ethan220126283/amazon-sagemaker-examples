@@ -40,14 +40,6 @@ then
     aws ecr create-repository --region ${region} --repository-name "${image}" > /dev/null
 fi
 
-
-# Build the docker image locally with the image name and then push it to ECR
-# with the full name.
-# Get the login command from ECR and execute it directly
-aws ecr-public get-login-password --region us-east-1 \
-	| docker login --username AWS --password-stdin public.ecr.aws
-
-
 docker build  -t ${image} $DIR/..
 docker tag ${image} ${fullname}
 

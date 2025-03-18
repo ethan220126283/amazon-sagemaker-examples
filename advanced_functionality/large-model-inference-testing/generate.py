@@ -1,7 +1,6 @@
 import json
 import io
 import time
-from typing import Union
 
 class LineIterator:
 
@@ -32,12 +31,7 @@ class LineIterator:
             self.buffer.seek(0, io.SEEK_END)
             self.buffer.write(chunk['PayloadPart']['Bytes'])
 
-def __invoke_endpoint(client, endpoint_name:str, prompt:str, params:Union[dict, str], keys: dict):
-    
-    key_inputs = keys.get("inputs", "inputs")
-    key_parameters = keys.get("parameters", "parameters")
-    data= { key_inputs: prompt, key_parameters: params }
- 
+def __invoke_endpoint(client, endpoint_name:str, data: dict): 
     body = json.dumps(data).encode("utf-8")
     response = client.invoke_endpoint(EndpointName=endpoint_name, 
                                     ContentType="application/json", 
@@ -47,12 +41,7 @@ def __invoke_endpoint(client, endpoint_name:str, prompt:str, params:Union[dict, 
     json_obj = json.loads(json_str)
     return json_obj
 
-def __invoke_streaming_endpoint(client, endpoint_name:str, prompt:str, params:Union[dict, str], keys: dict):
-    
-    key_inputs = keys.get("inputs", "inputs")
-    key_parameters = keys.get("parameters", "parameters")
-    data= { key_inputs: prompt, key_parameters: params }
-    
+def __invoke_streaming_endpoint(client, endpoint_name:str, data: dict):    
     body = json.dumps(data).encode("utf-8")
     response = client.invoke_endpoint_with_response_stream(EndpointName=endpoint_name, 
                                     ContentType="application/json", 
@@ -61,10 +50,8 @@ def __invoke_streaming_endpoint(client, endpoint_name:str, prompt:str, params:Un
     return event_stream
 
 
-def __generate(client, endpoint_name:str, prompt:str, params:Union[dict, str], keys: dict):
-    json_obj = __invoke_endpoint(client, 
-                                 endpoint_name=endpoint_name, 
-                                 prompt=prompt, params=params, keys=keys)
+def __generate(client, endpoint_name:str, data: dict):
+    json_obj = __invoke_endpoint(client, endpoint_name=endpoint_name, data=data)
     json_obj_type = type(json_obj)
     while json_obj_type is list:
         json_obj = json_obj[0]
@@ -89,11 +76,9 @@ def __generate(client, endpoint_name:str, prompt:str, params:Union[dict, str], k
 
     return generated_text, None
 
-def __generate_streaming(client, endpoint_name:str, prompt:str, params:Union[dict, str], keys: dict):
+def __generate_streaming(client, endpoint_name:str, data: dict):
 
-    event_stream = __invoke_streaming_endpoint(client, 
-                                               endpoint_name=endpoint_name, 
-                                               prompt=prompt, params=params, keys=keys)
+    event_stream = __invoke_streaming_endpoint(client, endpoint_name=endpoint_name, data=data)
     start_time = time.time()
     ttft = None
     generated_text =  ''
@@ -110,24 +95,10 @@ def __generate_streaming(client, endpoint_name:str, prompt:str, params:Union[dic
                 
     return generated_text, ttft
 
-def generate(client, endpoint_name:str, prompt:str, params:Union[dict, str], stream:bool, keys:dict):
-    text = None
-    ttft = None
-    if stream:
-        text, ttft = __generate_streaming(client=client, 
-                                          endpoint_name=endpoint_name, 
-                                          prompt=prompt, 
-                                          params=params, keys=keys)
+def generate(client, endpoint_name:str, data: dict, stream:bool):
+    if not stream:
+        return __generate(client=client, endpoint_name=endpoint_name, data=data)
     else:
-        text, ttft = __generate(client=client, 
-                                endpoint_name=endpoint_name, 
-                                prompt=prompt, 
-                                params=params, keys=keys)
-
-    index = text.find(prompt)
-    if index != -1:
-        text = text[len(prompt):]
-
-    return text, ttft
+        return __generate_streaming(client=client, endpoint_name=endpoint_name, data=data)
     
     

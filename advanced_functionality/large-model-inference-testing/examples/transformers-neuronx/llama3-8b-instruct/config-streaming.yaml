@@ -19,9 +19,6 @@ sagemaker:
   model:
     name: "meta-llama-3-8b-instruct-transformers-neuronx-streaming"
     container:  "containers/pytorch-inf2"
-    env: 
-      HUGGINGFACE_HUB_CACHE: "/tmp"
-      TRANSFORMERS_CACHE: "/tmp"
   endpoint:
     name: "meta-llama-3-8b-instruct-transformers-neuronx-streaming"
     instance_type: "ml.inf2.48xlarge"
@@ -34,7 +31,8 @@ test:
   module_name: "llama3_prompt_generator"
   module_dir: "modules/inst-semeval2017"
   prompt_generator: "PromptGenerator"
-  params: { "do_sample": true, "max_new_tokens": 1024, "top_k": 50 }
+  template: { "inputs": "", "parameters": { "do_sample": true, "max_new_tokens": 1024, "top_k": 50 }  }
+  template_keys: ["inputs"]
   warmup_iters: 1
   max_iters: 10
   n_concurrent: 4

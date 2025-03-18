@@ -10,12 +10,9 @@ djl:
 sagemaker:
   model:
     name: "ms-marco-minilm-l6v2-pytorch"
-    container: "containers/deepspeed"
-    env: 
-      HUGGINGFACE_HUB_CACHE: "/tmp"
-      TRANSFORMERS_CACHE: "/tmp"
+    container: "containers/lmi"
+    env:
       TOKENIZERS_PARALLELISM: "false"
-     
   endpoint:
     name: "ms-marco-minilm-l6v2-pytorch"
     instance_type: "ml.g5.2xlarge"
@@ -28,7 +25,8 @@ test:
   module_dir: "modules/inst-semeval2017"
   prompt_generator: "RerankerPair"
   task_name: "reranker"
-  params: {}
+  template: { "inputs": ""  }
+  template_keys: ["inputs"]
   warmup_iters: 1
   max_iters: 10
   output_dir: "output"

@@ -23,8 +23,8 @@ test:
   module_name: "llama3_prompt_generator"
   module_dir: "modules/inst-semeval2017"
   prompt_generator: "PromptGenerator"
-  generator_keys: { "inputs": "text_input", "parameters": "sampling_parameters"}
-  params: '{ "do_sample": true, "max_new_tokens": 1024, "top_k": 50 }'
+  template: { "text_input": "", "sampling_parameters": "{ \"do_sample\": true, \"max_new_tokens\": 1024, \"top_k\": 50 }"  }
+  template_keys: ["text_input"]
   warmup_iters: 1
   n_concurrent: 4
   max_iters: 10

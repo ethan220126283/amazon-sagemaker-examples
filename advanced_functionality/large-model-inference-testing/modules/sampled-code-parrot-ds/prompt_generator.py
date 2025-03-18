@@ -5,7 +5,7 @@ class PromptGenerator:
     def __init__(self) -> None:
         self.dataset = load_dataset("Pavithra/sampled-code-parrot-ds-train", split="train")
 
-    def __call__(self) -> str:
+    def __call__(self):
 
         for example in self.dataset:
             content = example["content"]
@@ -19,7 +19,7 @@ class PromptGenerator:
                     prompt = f"{prompt} {content_list[i]}"
                     i += 1
                 prompt = f"{prompt} "
-            yield prompt
+            yield [prompt]
             
             
     

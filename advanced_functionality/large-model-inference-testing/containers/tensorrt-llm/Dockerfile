@@ -1,1 +1,1 @@
-FROM deepjavalibrary/djl-serving:0.31.0-tensorrt-llm
+FROM deepjavalibrary/djl-serving:0.32.0-tensorrt-llm

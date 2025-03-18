@@ -29,13 +29,13 @@ class TritonPythonModel:
   def auto_complete_config(auto_complete_model_config):
       
     inputs = [
-    {"name": "text_input", "data_type": "TYPE_STRING", "dims": [1]},
-    {
-        "name": "sampling_parameters",
-        "data_type": "TYPE_STRING",
-        "dims": [1],
-        "optional": True,
-    }
+      {"name": "text_input", "data_type": "TYPE_STRING", "dims": [1]},
+      {
+          "name": "sampling_parameters",
+          "data_type": "TYPE_STRING",
+          "dims": [1],
+          "optional": True,
+      }
     ]
     outputs = [{"name": "text_output", "data_type": "TYPE_STRING", "dims": [-1]}]
 

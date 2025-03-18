@@ -10,12 +10,11 @@ from urllib.parse import urlparse
 from locust.contrib.fasthttp import FastHttpUser
 from locust import task, events
 from generate import generate
-
-
+from inference import inference
+from utils import fill_template, init_prompt_generator
 
 class EndpointClient:
     def __init__(self, host):
-        
         parse_output = urlparse(host)
         self.endpoint_name = parse_output.path.split('/')[2]
         self.content_type =os.getenv("CONTENT_TYPE", "application/json")
@@ -23,48 +22,28 @@ class EndpointClient:
         config = Config(region_name=aws_region, retries={"max_attempts": 0, "mode": "standard"})
         self.smr_client = boto3.client("sagemaker-runtime", config=config)
 
-        self.params = json.loads(os.getenv("MODEL_PARAMS", "{}"))
-        self.keys = json.loads(os.getenv("GENERATOR_KEYS", "{}"))
         self.streaming_enabled = os.getenv("STREAMING_ENABLED", "false").lower() in [ "true"]
         self.task_name = os.getenv("TASK_NAME", "text-generation")
-
-        self.__init_prompt_generator()
+        self.prompt_generator, self.prompt_template, self.prompt_template_keys = init_prompt_generator()
     
-    def __init_prompt_generator(self):
-        prompt_module_dir = os.getenv("PROMPT_MODULE_DIR", "")
-        sys.path.append(prompt_module_dir)
-        
-        prompt_module_name = os.getenv("PROMPT_MODULE_NAME", None)
-        prompt_module=import_module(prompt_module_name)
-        
-        prompt_generator_name = os.getenv('PROMPT_GENERATOR_NAME', None)
-        prompt_generator_class = getattr(prompt_module, prompt_generator_name)
-        
-        self.prompt_generator = prompt_generator_class()()
-
     def __text_generation_request(self, request_meta:dict):
         prompt = next(self.prompt_generator)
-        text, ttft = generate(self.smr_client, self.endpoint_name, 
-                                    prompt=prompt, 
-                                    params=self.params, 
-                                    stream=self.streaming_enabled, keys=self.keys)
+        data = fill_template(template=self.prompt_template, template_keys=self.prompt_template_keys, inputs=prompt)
+        text, ttft = generate(self.smr_client, self.endpoint_name, data=data,stream=self.streaming_enabled)
+        prompt = prompt[0] if len(prompt) == 1 else prompt
+        index = text.find(prompt) if isinstance(prompt, str) else -1
+        if index != -1:
+            text = text[len(prompt):]
         if ttft is not None:
             request_meta['response'] = {"prompt": prompt, "text": text, "ttft": ttft}
         else:
             request_meta['response'] = {"prompt": prompt, "text": text}
       
-
     def __inference_request(self, request_meta:dict):
         prompt = next(self.prompt_generator)
-        data= { "inputs": prompt }
-        data["parameters"] = self.params
-        body = json.dumps(data).encode("utf-8")
-        response = self.smr_client.invoke_endpoint(EndpointName=self.endpoint_name, 
-                                            ContentType="application/json", 
-                                            Accept="application/json", Body=body)
-        body = response["Body"].read()
-        result = json.loads( body.decode("utf-8"))
-        request_meta['response'] = {"prompt": prompt, "output": result['output']}
+        data = fill_template(template=self.prompt_template, template_keys=self.prompt_template_keys, inputs=prompt)
+        result = inference(self.smr_client, self.endpoint_name, data=data)
+        request_meta['response'] = {"prompt": data, "output": result['output']}
 
     def send(self):
 

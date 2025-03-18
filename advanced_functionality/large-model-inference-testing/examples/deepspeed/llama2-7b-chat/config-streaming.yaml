@@ -16,10 +16,7 @@ djl:
 sagemaker:
   model:
     name: "llama-2-7b-chat-hf-deepspeed-streaming"
-    container: "containers/deepspeed"
-    env: 
-      HUGGINGFACE_HUB_CACHE: "/tmp"
-      TRANSFORMERS_CACHE: "/tmp"
+    container: "containers/deepspeed" 
   endpoint:
     name: "llama-2-7b-chat-hf-deepspeed-streaming"
     instance_type: "ml.g5.12xlarge"
@@ -31,7 +28,8 @@ test:
   module_name: "prompt_generator"
   module_dir: "modules/inst-semeval2017"
   prompt_generator: "PromptGenerator"
-  params: { "do_sample": true, "max_new_tokens": 1024, "top_k": 50 }
+  template: { "inputs": "", "parameters": { "do_sample": true, "max_new_tokens": 1024, "top_k": 50 }  }
+  template_keys: ["inputs"]
   warmup_iters: 1
   max_iters: 10
   output_dir: "output"

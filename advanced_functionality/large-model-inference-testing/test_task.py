@@ -1,10 +1,13 @@
-import subprocess
 import time
-from importlib import import_module
-import sys
 import json
 from generate import generate
-from utils import get_tokenizer
+from inference import inference
+from utils import (
+    get_tokenizer, 
+    fill_template, 
+    init_prompt_generator,
+    set_prompt_env
+)
 import os
 import boto3
 import multiprocessing as mp
@@ -17,7 +20,8 @@ def test_task(model_id: str,
               hf_token:str=None) -> None:
 
     task_name = test_spec.get('task_name', "text-generation")
-
+    set_prompt_env(test_spec=test_spec)
+        
     n_concurrent = test_spec.get('n_concurrent', 1)
     task_args = {}
     if task_name == "text-generation":
@@ -50,7 +54,7 @@ def __call_fn(t: tuple):
     fn = t[0]
     kwargs = t[1]
     fn(**kwargs)
-    
+
 def _test_text_generation(model_id:str, 
                     hf_token: str,
                     test_spec: dict, 
@@ -64,33 +68,10 @@ def _test_text_generation(model_id:str,
     s3_client = boto3.client('s3')
     tokenizer = get_tokenizer(s3_client, model_id, hf_token=hf_token)
     
-    module_name = test_spec.get('module_name', None)
-    assert module_name, "'test.module_name' is required"
-    
-    module_dir = test_spec.get('module_dir', None)
-    assert module_name, "'test.module_dir' is required"
-    
-    prompt_generator = test_spec.get('prompt_generator', None)
-    assert prompt_generator, "'test.prompt_generator' is required"
-    
-    sys.path.append(module_dir)
-    
-    requirements_path = os.path.join(module_dir, "requirements.txt")
-    if os.path.isfile(requirements_path):
-        print(f"{pid}: Installing test module requirements...")
-        subprocess.check_output(f"pip install -r {requirements_path}", shell=True, stderr=subprocess.STDOUT)
-    
-    print(f"{pid}: Loading test module: {module_name} from {module_dir}")
-    mod=import_module(module_name)
-    prompt_generator_class = getattr(mod, prompt_generator)
-    
-    print(f"{pid}: Creating prompt generator object for class: {prompt_generator_class}")
-    prompt_generator = prompt_generator_class()()
+    prompt_generator, prompt_template, prompt_template_keys = init_prompt_generator()
 
     warmup_iters = int(test_spec.get('warmup_iters', 1))
     max_iters = int(test_spec.get('max_iters', 10))
-    params = test_spec.get("params", None)
-    keys = test_spec.get("generator_keys", dict())
 
     cumu_time = 0.0
     cumu_tokens = 0
@@ -107,11 +88,12 @@ def _test_text_generation(model_id:str,
                 ttft = None
                 
                 start_time = time.time()
-                text, ttft = generate(sm_runtime_client, 
-                                    endpoint_name, 
-                                    prompt=prompt,
-                                    params=params, 
-                                    stream=streaming_enabled, keys=keys)
+                data = fill_template(template=prompt_template, template_keys=prompt_template_keys, inputs=prompt)
+                text, ttft = generate(sm_runtime_client, endpoint_name, data=data, stream=streaming_enabled)
+                prompt = prompt[0] if len(prompt) == 1 else prompt
+                index = text.find(prompt) if isinstance(prompt, str) else -1
+                if index != -1:
+                    text = text[len(prompt):]
                 latency = time.time() - start_time
                 
                 if ttft is None:
@@ -160,32 +142,10 @@ def _test_inference(test_spec: dict,
     
     pid = os.getpid()
     sm_runtime_client = boto3.client("runtime.sagemaker")
-    module_name = test_spec.get('module_name', None)
-    assert module_name, "'test.module_name' is required"
-    
-    module_dir = test_spec.get('module_dir', None)
-    assert module_name, "'test.module_dir' is required"
-    
-    prompt_generator = test_spec.get('prompt_generator', None)
-    assert prompt_generator, "'test.prompt_generator' is required"
-    
-    sys.path.append(module_dir)
-    
-    requirements_path = os.path.join(module_dir, "requirements.txt")
-    if os.path.isfile(requirements_path):
-        print(f"{pid}: Installing test module requirements...")
-        subprocess.check_output(f"pip install -r {requirements_path}", shell=True, stderr=subprocess.STDOUT)
-    
-    print(f"{pid}: Loading test module: {module_name} from {module_dir}")
-    mod=import_module(module_name)
-    prompt_generator_class = getattr(mod, prompt_generator)
-    
-    print(f"{pid}: Creating prompt generator object for class: {prompt_generator_class}")
-    prompt_generator = prompt_generator_class()()
+    prompt_generator, prompt_template, prompt_template_keys = init_prompt_generator()
 
     warmup_iters = int(test_spec.get('warmup_iters', 1))
     max_iters = int(test_spec.get('max_iters', 10))
-    params = test_spec.get("params", None)
     cumu_time = 0.0
 
     try:
@@ -198,13 +158,9 @@ def _test_inference(test_spec: dict,
             while prompt := next(prompt_generator):
 
                 start_time = time.time()
+                data = fill_template(template=prompt_template, template_keys=prompt_template_keys, inputs=prompt)
                 
-                data= { "inputs": prompt }
-                data["parameters"] = params
-                body = json.dumps(data).encode("utf-8")
-                response = sm_runtime_client.invoke_endpoint(EndpointName=endpoint_name, 
-                                                    ContentType="application/json", 
-                                                    Accept="application/json", Body=body)
+                result = inference(sm_runtime_client, endpoint_name, data=data)
                 latency = time.time() - start_time
                     
                 count += 1
@@ -215,15 +171,11 @@ def _test_inference(test_spec: dict,
                 iter_count = count - warmup_iters
                 cumu_time += latency
                     
-                body = response["Body"].read()
-                json_obj = json.loads( body.decode("utf-8"))
-                output = json_obj["output"]
-
-                json_obj = {"prompt": prompt, 
-                            "output": output, 
-                            "latency": latency}
+                output = result["output"]
+                prompt = prompt[0] if len(prompt) == 1 else prompt
+                result = {"prompt": prompt, "output": output, "latency": latency}
                 
-                results.write(json.dumps( json_obj )+"\n")   
+                results.write(json.dumps( result )+"\n")   
                 avg_latency = cumu_time/iter_count
                 
                 print(f"{pid}: Iterations completed: {iter_count} of {max_iters}; avg_latency: {avg_latency} secs")

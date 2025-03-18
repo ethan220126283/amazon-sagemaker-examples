@@ -1,4 +1,5 @@
-FROM public.ecr.aws/lts/ubuntu:22.04_stable
+ARG BASE_IMAGE=public.ecr.aws/lts/ubuntu:22.04_stable
+FROM $BASE_IMAGE
 
 ENV DEBIAN_FRONTEND=noninteractive
 ENV DEBCONF_NONINTERACTIVE_SEEN=true
@@ -57,7 +58,7 @@ RUN apt update -q=2 \
 RUN git clone https://github.com/triton-inference-server/server.git /server
 RUN cd /server && git fetch origin bf86c27169ad4027202c76cf609ce42a2ec7b533
 RUN cd /server && git reset --hard bf86c27169ad4027202c76cf609ce42a2ec7b533
-RUN cd /server && ./build.py -v --no-container-build --build-dir=/server/build --backend=python --backend=ensemble --enable-metrics --enable-logging --enable-stats --endpoint="http" --endpoint="grpc" --filesystem="s3"
+RUN cd /server && ./build.py -v --no-container-build --build-dir=/server/build --backend=python --enable-metrics --enable-logging --enable-stats --endpoint="http" --endpoint="grpc" --filesystem="s3"
 
 RUN apt-get -y install gnupg2
 RUN wget -qO - https://apt.repos.neuron.amazonaws.com/GPG-PUB-KEY-AMAZON-AWS-NEURON.PUB > ./GPG-PUB-KEY-AMAZON-AWS-NEURON.PUB
@@ -73,34 +74,33 @@ RUN apt-get -y install aws-neuronx-collectives=2.*
 RUN apt-get -y install aws-neuronx-runtime-lib=2.*
 RUN apt-get -y install aws-neuronx-tools=2.*
 
-RUN pip3 config set global.extra-index-url https://pip.repos.neuron.amazonaws.com
-RUN pip3 install awscli
-RUN pip3 install neuronx-cc==2.16.* torch-neuronx==2.5.* torchvision transformers-neuronx
+RUN pip3 install awscli --extra-index-url https://pip.repos.neuron.amazonaws.com
+RUN pip3 install --extra-index-url https://pip.repos.neuron.amazonaws.com neuronx-cc==2.16.* torch-neuronx==2.5.* torchvision transformers-neuronx optimum[neuronx]
 
 RUN pip3 install ray
-
-RUN pip3 install --extra-index-url https://pip.repos.neuron.amazonaws.com optimum[neuronx]
-RUN git clone https://github.com/deepjavalibrary/djl-serving.git /opt/djl-serving
-RUN cd /opt/djl-serving && git fetch origin c343d60b35f0d42f96f678570a553953f055ab32
-RUN cd /opt/djl-serving && git reset --hard c343d60b35f0d42f96f678570a553953f055ab32
-RUN cd /opt/djl-serving/engines/python/setup  && pip3 install -e .
-
-ENV VLLM_TARGET_DEVICE=neuron
-RUN git clone https://github.com/vllm-project/vllm.git /opt/vllm
-RUN cd /opt/vllm && git fetch origin 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
-RUN cd /opt/vllm && git reset --hard 5b734fb7edfdf3f8a836a3ddee81eba506230fdd
-RUN pip3 install -r /opt/vllm/requirements-neuron.txt
-RUN cd /opt/vllm && pip3 install -e .
-
-RUN pip3 install triton==2.2.0 pynvml==11.5.3 transformers==4.44.2
 
 RUN cp -r /server/build/opt/* /opt/
 RUN rm -rf /server
 
-COPY resources /opt/program
-RUN chmod u+x /opt/program/serve
+ENV VLLM_TARGET_DEVICE=neuron
+RUN git clone https://github.com/vllm-project/vllm.git /opt/vllm
+RUN cd /opt/vllm && git fetch origin 2339d59f9260499599d60599f83978fad1827999
+RUN cd /opt/vllm && git reset --hard 2339d59f9260499599d60599f83978fad1827999
+COPY patch /opt/patch
+RUN cd /opt/vllm && git apply --ignore-whitespace /opt/patch/vllm-neuron-0.6.6.post1.patch
+RUN pip3 install -r /opt/vllm/requirements-neuron.txt
+RUN cd /opt/vllm && pip3 install -e .
 
-ENV PATH=/opt/program:/opt/aws/neuron/bin:/opt/tritonserver/bin:$PATH
+RUN git clone https://github.com/triton-inference-server/vllm_backend.git /opt/vllm_backend
+RUN cd /opt/vllm_backend && git fetch origin 507e4dccabf85c3b7821843261bcea7ea5828802
+RUN cd /opt/vllm_backend && git reset --hard 507e4dccabf85c3b7821843261bcea7ea5828802
+
+RUN mkdir -p /opt/tritonserver/backends/vllm
+RUN cp -r /opt/vllm_backend/src/* /opt/tritonserver/backends/vllm/
+
+RUN pip3 install pynvml==11.5.3 transformers==4.48.3
+
+ENV PATH=/opt/aws/neuron/bin:/opt/tritonserver/bin:$PATH
 ENV PYTHONDONTWRITEBYTECODE=1
 ENV PYTHONUNBUFFERED=1
 ENV PJRT_DEVICE=NEURON

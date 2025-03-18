@@ -15,9 +15,6 @@ sagemaker:
   model:
     name: "mistral-7b-instruct-v0-2-deepspeed"
     container: "containers/deepspeed"
-    env: 
-      HUGGINGFACE_HUB_CACHE: "/tmp"
-      TRANSFORMERS_CACHE: "/tmp"
   endpoint:
     name: "mistral-7b-instruct-v0-2-deepspeed"
     instance_type: "ml.g5.12xlarge"
@@ -29,7 +26,8 @@ test:
   module_name: "prompt_generator"
   module_dir: "modules/inst-semeval2017"
   prompt_generator: "PromptGenerator"
-  params: { "do_sample": true, "max_new_tokens": 1024, "top_k": 50 }
+  template: { "inputs": "", "parameters": { "do_sample": true, "max_new_tokens": 1024, "top_k": 50 }  }
+  template_keys: ["inputs"]
   warmup_iters: 1
   max_iters: 10
   output_dir: "output"

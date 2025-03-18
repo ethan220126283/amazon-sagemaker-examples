@@ -12,11 +12,8 @@ sagemaker:
   model:
     name: "jina-embeddings-v2-small-en-pytorch-neuronx"
     container:  "containers/pytorch-inf2"
-    env: 
-      HUGGINGFACE_HUB_CACHE: "/tmp"
-      TRANSFORMERS_CACHE: "/tmp"
+    env:
       TOKENIZERS_PARALLELISM: "false"
-    
   endpoint:
     name: "jina-embeddings-v2-small-en-pytorch-neuronx"
     instance_type: "ml.inf2.xlarge"
@@ -29,7 +26,8 @@ test:
   module_dir: "modules/inst-semeval2017"
   prompt_generator: "EmbeddingText"
   task_name: "text-embedding"
-  params: {}
+  template: { "inputs": ""  }
+  template_keys: ["inputs"]
   warmup_iters: 1
   max_iters: 10
   output_dir: "output"
